@@ -219,16 +219,29 @@ pub struct ScheduleHandle {
     stop: Arc<AtomicBool>,
     thread_handle: Option<thread::JoinHandle<()>>,
 }
+
 impl ScheduleHandle {
+    /// Stop the background thread and wait for it to finish
+    fn shutdown(&mut self, ignore_join_error: bool) {
+        self.stop.store(true, Ordering::SeqCst);
+        if let Some(handle) = self.thread_handle.take() {
+            if ignore_join_error {
+                let _ = handle.join();
+            } else {
+                handle.join().expect("Thread panicked");
+            }
+        }
+    }
+
     /// Halt the scheduler background thread
-    pub fn stop(self) {}
+    pub fn stop(mut self) {
+        self.shutdown(false);
+    }
 }
 
 impl Drop for ScheduleHandle {
     fn drop(&mut self) {
-        self.stop.store(true, Ordering::SeqCst);
-        let handle = self.thread_handle.take();
-        handle.unwrap().join().ok();
+        self.shutdown(true);
     }
 }
 
